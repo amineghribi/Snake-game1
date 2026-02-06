@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Snake Game</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
 <style>
 body {
@@ -20,20 +20,17 @@ h1 { margin: 5px 0; }
   display: flex;
   justify-content: space-around;
   font-size: 16px;
-  margin-bottom: 5px;
 }
 
 canvas {
   background: #000;
   display: block;
-  margin: auto;
+  margin: 10px auto;
   border: 2px solid #0f0;
-  touch-action: none;
 }
 
 button {
-  margin-top: 10px;
-  width: 120px;
+  width: 140px;
   height: 45px;
   font-size: 18px;
   border-radius: 10px;
@@ -47,82 +44,71 @@ button {
 <body>
 
 <h1>🐍 Snake</h1>
-
 <div id="info">
   <div id="score">Score: 0</div>
   <div id="high">High: 0</div>
 </div>
 
-<canvas id="game"></canvas>
+<canvas id="game" width="300" height="300"></canvas>
 <button onclick="startGame()">▶️ Start</button>
 
-<audio id="eatSound" src="https://actions.google.com/sounds/v1/cartoon/pop.ogg"></audio>
-<audio id="overSound" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+<audio id="eat" src="https://actions.google.com/sounds/v1/cartoon/pop.ogg"></audio>
+<audio id="over" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-function resize() {
-  const size = Math.min(window.innerWidth - 20, 320);
-  canvas.width = size;
-  canvas.height = size;
-}
-resize();
-window.addEventListener("resize", resize);
+const box = 15;
+const rows = canvas.height / box;
+const cols = canvas.width / box;
 
-const box = 20;
-let snake, direction, food, game;
+let snake = [];
+let dir = null;
+let food = {};
+let game = null;
 let score = 0;
 let speed = 150;
 let started = false;
 
-let highScore = localStorage.getItem("snakeHigh") || 0;
-document.getElementById("high").textContent = "High: " + highScore;
+let high = localStorage.getItem("snakeHigh") || 0;
+document.getElementById("high").textContent = "High: " + high;
 
 function init() {
-  snake = [{ x: box * 3, y: box * 3 }];
-  direction = "right";
+  snake = [
+    { x: 7 * box, y: 7 * box }
+  ];
+  dir = null; // ⬅️ مهم
   score = 0;
   speed = 150;
   started = true;
-  updateScore();
   food = randomFood();
+  updateScore();
 }
 
 function randomFood() {
-  let pos;
-  do {
-    pos = {
-      x: Math.floor(Math.random() * (canvas.width / box)) * box,
-      y: Math.floor(Math.random() * (canvas.height / box)) * box
-    };
-  } while (snake.some(p => p.x === pos.x && p.y === pos.y));
-  return pos;
+  return {
+    x: Math.floor(Math.random() * cols) * box,
+    y: Math.floor(Math.random() * rows) * box
+  };
 }
 
 function startGame() {
   clearInterval(game);
   init();
   game = setInterval(draw, speed);
-
-  if (document.documentElement.requestFullscreen) {
-    document.documentElement.requestFullscreen().catch(()=>{});
-  }
 }
 
 function updateScore() {
   document.getElementById("score").textContent = "Score: " + score;
-  if (score > highScore) {
-    highScore = score;
-    localStorage.setItem("snakeHigh", highScore);
-    document.getElementById("high").textContent = "High: " + highScore;
+  if (score > high) {
+    high = score;
+    localStorage.setItem("snakeHigh", high);
+    document.getElementById("high").textContent = "High: " + high;
   }
 }
 
 function draw() {
-  if (!started) return;
-
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   snake.forEach((p, i) => {
@@ -133,32 +119,35 @@ function draw() {
   ctx.fillStyle = "red";
   ctx.fillRect(food.x, food.y, box, box);
 
+  if (!dir) return; // ⬅️ لا حركة = لا Game Over
+
   let head = { ...snake[0] };
 
-  if (direction === "left") head.x -= box;
-  if (direction === "right") head.x += box;
-  if (direction === "up") head.y -= box;
-  if (direction === "down") head.y += box;
+  if (dir === "left") head.x -= box;
+  if (dir === "right") head.x += box;
+  if (dir === "up") head.y -= box;
+  if (dir === "down") head.y += box;
 
+  // collision
   if (
     head.x < 0 || head.y < 0 ||
     head.x >= canvas.width || head.y >= canvas.height ||
     snake.some(p => p.x === head.x && p.y === head.y)
   ) {
-    document.getElementById("overSound").play();
+    document.getElementById("over").play();
     clearInterval(game);
+    alert("Game Over | Score: " + score);
     started = false;
-    alert("Game Over 🐍 | Score: " + score);
     return;
   }
 
   if (head.x === food.x && head.y === food.y) {
-    document.getElementById("eatSound").play();
+    document.getElementById("eat").play();
     score++;
     updateScore();
 
     if (speed > 60) {
-      speed -= 5; // ⚡ speed يزيد
+      speed -= 8;
       clearInterval(game);
       game = setInterval(draw, speed);
     }
@@ -171,25 +160,33 @@ function draw() {
   snake.unshift(head);
 }
 
-/* ===== Swipe Controls ===== */
-let touchX = 0, touchY = 0;
+/* ========= Swipe Controls (iPhone OK) ========= */
+let xStart = null;
+let yStart = null;
 
-canvas.addEventListener("touchstart", e => {
-  touchX = e.touches[0].clientX;
-  touchY = e.touches[0].clientY;
-});
+document.addEventListener("touchstart", e => {
+  xStart = e.touches[0].clientX;
+  yStart = e.touches[0].clientY;
+}, { passive: true });
 
-canvas.addEventListener("touchend", e => {
-  let dx = e.changedTouches[0].clientX - touchX;
-  let dy = e.changedTouches[0].clientY - touchY;
+document.addEventListener("touchend", e => {
+  if (!xStart || !yStart) return;
+
+  let xEnd = e.changedTouches[0].clientX;
+  let yEnd = e.changedTouches[0].clientY;
+
+  let dx = xEnd - xStart;
+  let dy = yEnd - yStart;
 
   if (Math.abs(dx) > Math.abs(dy)) {
-    if (dx > 0 && direction !== "left") direction = "right";
-    if (dx < 0 && direction !== "right") direction = "left";
+    if (dx > 0 && dir !== "left") dir = "right";
+    if (dx < 0 && dir !== "right") dir = "left";
   } else {
-    if (dy > 0 && direction !== "up") direction = "down";
-    if (dy < 0 && direction !== "down") direction = "up";
+    if (dy > 0 && dir !== "up") dir = "down";
+    if (dy < 0 && dir !== "down") dir = "up";
   }
+
+  xStart = yStart = null;
 });
 </script>
 
