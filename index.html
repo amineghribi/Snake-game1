@@ -6,92 +6,86 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
-  body {
-    margin: 0;
-    background: #111;
-    color: white;
-    font-family: Arial, sans-serif;
-    text-align: center;
-  }
+body {
+  margin: 0;
+  background: #111;
+  color: white;
+  font-family: Arial, sans-serif;
+  text-align: center;
+}
 
-  h1 { margin: 5px 0; }
+h1 { margin: 5px 0; }
 
-  #score {
-    font-size: 18px;
-    margin-bottom: 5px;
-  }
+#info {
+  display: flex;
+  justify-content: space-around;
+  font-size: 16px;
+  margin-bottom: 5px;
+}
 
-  canvas {
-    background: #000;
-    display: block;
-    margin: auto;
-    border: 2px solid #0f0;
-    touch-action: none;
-  }
+canvas {
+  background: #000;
+  display: block;
+  margin: auto;
+  border: 2px solid #0f0;
+  touch-action: none;
+}
 
-  .controls { margin-top: 10px; }
-
-  .row {
-    display: flex;
-    justify-content: center;
-  }
-
-  button {
-    width: 70px;
-    height: 70px;
-    margin: 5px;
-    font-size: 22px;
-    border-radius: 10px;
-    border: none;
-    background: #0f0;
-    color: #000;
-    font-weight: bold;
-  }
+button {
+  margin-top: 10px;
+  width: 120px;
+  height: 45px;
+  font-size: 18px;
+  border-radius: 10px;
+  border: none;
+  background: #0f0;
+  font-weight: bold;
+}
 </style>
 </head>
 
 <body>
 
 <h1>🐍 Snake</h1>
-<div id="score">Score: 0</div>
-<canvas id="game"></canvas>
 
-<div class="controls">
-  <div class="row">
-    <button onclick="startGame()">▶️</button>
-  </div>
-  <div class="row">
-    <button onclick="setDir('left')">⬅️</button>
-    <button onclick="setDir('up')">⬆️</button>
-    <button onclick="setDir('down')">⬇️</button>
-    <button onclick="setDir('right')">➡️</button>
-  </div>
+<div id="info">
+  <div id="score">Score: 0</div>
+  <div id="high">High: 0</div>
 </div>
 
-<!-- Sounds -->
+<canvas id="game"></canvas>
+<button onclick="startGame()">▶️ Start</button>
+
 <audio id="eatSound" src="https://actions.google.com/sounds/v1/cartoon/pop.ogg"></audio>
-<audio id="gameOverSound" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+<audio id="overSound" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-const scoreDiv = document.getElementById("score");
 
-function resizeCanvas() {
+function resize() {
   const size = Math.min(window.innerWidth - 20, 320);
   canvas.width = size;
   canvas.height = size;
 }
-resizeCanvas();
-window.addEventListener("resize", resizeCanvas);
+resize();
+window.addEventListener("resize", resize);
 
 const box = 20;
-let snake, direction, food, game, score;
+let snake, direction, food, game;
+let score = 0;
+let speed = 150;
+let started = false;
+
+let highScore = localStorage.getItem("snakeHigh") || 0;
+document.getElementById("high").textContent = "High: " + highScore;
 
 function init() {
-  snake = [{ x: box * 5, y: box * 5 }];
+  snake = [{ x: box * 3, y: box * 3 }];
   direction = "right";
   score = 0;
+  speed = 150;
+  started = true;
   updateScore();
   food = randomFood();
 }
@@ -110,28 +104,25 @@ function randomFood() {
 function startGame() {
   clearInterval(game);
   init();
-  game = setInterval(draw, 120);
-  requestFullscreen();
-}
+  game = setInterval(draw, speed);
 
-function requestFullscreen() {
   if (document.documentElement.requestFullscreen) {
     document.documentElement.requestFullscreen().catch(()=>{});
   }
 }
 
 function updateScore() {
-  scoreDiv.textContent = "Score: " + score;
-}
-
-function setDir(dir) {
-  if (dir === "left" && direction !== "right") direction = "left";
-  if (dir === "right" && direction !== "left") direction = "right";
-  if (dir === "up" && direction !== "down") direction = "up";
-  if (dir === "down" && direction !== "up") direction = "down";
+  document.getElementById("score").textContent = "Score: " + score;
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem("snakeHigh", highScore);
+    document.getElementById("high").textContent = "High: " + highScore;
+  }
 }
 
 function draw() {
+  if (!started) return;
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   snake.forEach((p, i) => {
@@ -143,6 +134,7 @@ function draw() {
   ctx.fillRect(food.x, food.y, box, box);
 
   let head = { ...snake[0] };
+
   if (direction === "left") head.x -= box;
   if (direction === "right") head.x += box;
   if (direction === "up") head.y -= box;
@@ -153,8 +145,9 @@ function draw() {
     head.x >= canvas.width || head.y >= canvas.height ||
     snake.some(p => p.x === head.x && p.y === head.y)
   ) {
-    document.getElementById("gameOverSound").play();
+    document.getElementById("overSound").play();
     clearInterval(game);
+    started = false;
     alert("Game Over 🐍 | Score: " + score);
     return;
   }
@@ -163,6 +156,13 @@ function draw() {
     document.getElementById("eatSound").play();
     score++;
     updateScore();
+
+    if (speed > 60) {
+      speed -= 5; // ⚡ speed يزيد
+      clearInterval(game);
+      game = setInterval(draw, speed);
+    }
+
     food = randomFood();
   } else {
     snake.pop();
@@ -170,6 +170,27 @@ function draw() {
 
   snake.unshift(head);
 }
+
+/* ===== Swipe Controls ===== */
+let touchX = 0, touchY = 0;
+
+canvas.addEventListener("touchstart", e => {
+  touchX = e.touches[0].clientX;
+  touchY = e.touches[0].clientY;
+});
+
+canvas.addEventListener("touchend", e => {
+  let dx = e.changedTouches[0].clientX - touchX;
+  let dy = e.changedTouches[0].clientY - touchY;
+
+  if (Math.abs(dx) > Math.abs(dy)) {
+    if (dx > 0 && direction !== "left") direction = "right";
+    if (dx < 0 && direction !== "right") direction = "left";
+  } else {
+    if (dy > 0 && direction !== "up") direction = "down";
+    if (dy < 0 && direction !== "down") direction = "up";
+  }
+});
 </script>
 
 </body>
