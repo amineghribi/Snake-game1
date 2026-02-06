@@ -27,8 +27,8 @@ button{width:80px;height:70px;margin:5px;font-size:30px;border-radius:10px;borde
 <div class="controls">
 <button onclick="startGame()">▶️ Start</button>
 <div style="margin-top:10px;">
-<button onclick="setDir('left')">⬅️</button>
-<button onclick="setDir('right')">➡️</button>
+<button onclick="turnLeft()">⬅️</button>
+<button onclick="turnRight()">➡️</button>
 </div>
 </div>
 
@@ -36,85 +36,94 @@ button{width:80px;height:70px;margin:5px;font-size:30px;border-radius:10px;borde
 <audio id="over" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
 
 <script>
-const canvas=document.getElementById("game");
-const ctx=canvas.getContext("2d");
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const box = 15;
+const rows = canvas.height / box;
+const cols = canvas.width / box;
 
-const box=15;
-const rows=canvas.height/box;
-const cols=canvas.width/box;
+let snake = [], dir = {x:1, y:0}, food = {}, game=null, score=0, speed=150, started=false;
+let high = localStorage.getItem("snakeHigh") || 0;
+document.getElementById("high").textContent = "High: " + high;
 
-let snake=[], dir='right', food={}, game=null, score=0, speed=150, started=false;
-let moved=false; // مهم: يتحكم في أول حركة
-let high=localStorage.getItem("snakeHigh")||0;
-document.getElementById("high").textContent="High: "+high;
-
-function init(){
-  snake=[{x:Math.floor(cols/2)*box,y:Math.floor(rows/2)*box}];
-  dir='right';
-  score=0; speed=150; started=true; moved=false;
-  food=randomFood();
+function init() {
+  snake = [{x: Math.floor(cols/2)*box, y: Math.floor(rows/2)*box}];
+  dir = {x:1, y:0}; // تتحرك يمين أولاً
+  score = 0;
+  speed = 150;
+  started = true;
+  food = randomFood();
   updateScore();
 }
 
-function randomFood(){
+function randomFood() {
   let pos;
-  do{ pos={x:Math.floor(Math.random()*cols)*box,y:Math.floor(Math.random()*rows)*box};
-  }while(snake.some(p=>p.x===pos.x&&p.y===pos.y));
+  do {
+    pos = {x: Math.floor(Math.random()*cols)*box, y: Math.floor(Math.random()*rows)*box};
+  } while(snake.some(p => p.x === pos.x && p.y === pos.y));
   return pos;
 }
 
-function startGame(){
-  clearInterval(game); init();
-  game=setInterval(draw,speed);
-  if(document.documentElement.requestFullscreen){document.documentElement.requestFullscreen().catch(()=>{});}
+function startGame() {
+  clearInterval(game);
+  init();
+  game = setInterval(draw, speed);
 }
 
-function updateScore(){
-  document.getElementById("score").textContent="Score: "+score;
-  if(score>high){high=score;localStorage.setItem("snakeHigh",high);document.getElementById("high").textContent="High: "+high;}
+function updateScore() {
+  document.getElementById("score").textContent = "Score: " + score;
+  if(score > high) { high = score; localStorage.setItem("snakeHigh", high); document.getElementById("high").textContent = "High: " + high;}
 }
 
-function setDir(newDir){
-  if(newDir==="left"&&dir!=="right")dir="left";
-  if(newDir==="right"&&dir!=="left")dir="right";
+function turnLeft() {
+  // 90° left
+  let tmp = dir.x;
+  dir.x = -dir.y;
+  dir.y = tmp;
 }
 
-function draw(){
-ctx.clearRect(0,0,canvas.width,canvas.height);
+function turnRight() {
+  // 90° right
+  let tmp = dir.x;
+  dir.x = dir.y;
+  dir.y = -tmp;
+}
 
-// رسم الثعبان
-snake.forEach((p,i)=>{ctx.fillStyle=i===0?"lime":"green";ctx.fillRect(p.x,p.y,box,box);});
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-// رسم الطعام
-ctx.fillStyle="red";
-ctx.fillRect(food.x,food.y,box,box);
+  // رسم الثعبان
+  snake.forEach((p,i)=>{ctx.fillStyle=i===0?"lime":"green"; ctx.fillRect(p.x,p.y,box,box);});
+  // رسم الطعام
+  ctx.fillStyle = "red"; ctx.fillRect(food.x, food.y, box, box);
 
-// حساب الرأس الجديد
-let head={...snake[0]};
-if(dir==="left")head.x-=box;
-if(dir==="right")head.x+=box;
+  // رأس جديد
+  let head = {x: snake[0].x + dir.x*box, y: snake[0].y + dir.y*box};
 
-// Game Over بعد أول حركة
-if(moved){
-  if(head.x<0||head.x>=canvas.width||snake.some(p=>p.x===head.x&&p.y===head.y)){
+  // حرك Snake عبر الجوانب (Pac-Man)
+  if(head.x < 0) head.x = canvas.width - box;
+  if(head.x >= canvas.width) head.x = 0;
+  if(head.y < 0) head.y = canvas.height - box;
+  if(head.y >= canvas.height) head.y = 0;
+
+  // Game Over إذا اصطدمت بنفسها
+  if(snake.some(p => p.x === head.x && p.y === head.y)) {
     document.getElementById("over").play();
     clearInterval(game);
     started=false;
     alert("Game Over | Score: "+score);
     return;
   }
-} else { moved=true; } // أول حركة تعدي بدون Game Over
 
-// إذا أكل الطعام
-if(head.x===food.x&&head.y===food.y){
-  document.getElementById("eat").play();
-  score++; updateScore();
-  if(speed>60){speed-=8; clearInterval(game); game=setInterval(draw,speed);}
-  food=randomFood();
-} else { snake.pop(); }
+  // أكل الطعام
+  if(head.x === food.x && head.y === food.y) {
+    document.getElementById("eat").play();
+    score++; updateScore();
+    if(speed > 60) { speed -= 8; clearInterval(game); game=setInterval(draw,speed);}
+    food = randomFood();
+  } else { snake.pop(); }
 
-// إضافة الرأس الجديد
-snake.unshift(head);
+  snake.unshift(head);
 }
 </script>
 </body>
